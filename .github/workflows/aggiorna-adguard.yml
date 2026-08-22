@@ -1,0 +1,41 @@
+name: Aggiorna AdGuard DNS filter in formato mrs
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  aggiorna:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del repository
+        uses: actions/checkout@v4
+
+      - name: Scarica il filtro AdGuard ufficiale
+        run: |
+          curl -sL -o filter.txt "https://adguardteam.github.io/AdGuardSDNSFilter/Filters/filter.txt"
+
+      - name: Estrae i soli domini puri
+        run: |
+          grep -oE '^\|\|[a-zA-Z0-9.-]+\^$' filter.txt | sed 's/^||//; s/\^$//; s/^/+./' > adguard_domini.txt
+          wc -l adguard_domini.txt
+
+      - name: Scarica il binario ufficiale mihomo
+        run: |
+          curl -sL -o mihomo.gz "https://github.com/MetaCubeX/mihomo/releases/download/v1.19.30/mihomo-linux-amd64-compatible-v1.19.30.gz"
+          gzip -d mihomo.gz
+          chmod +x mihomo
+
+      - name: Converte in formato mrs
+        run: |
+          ./mihomo convert-ruleset domain text adguard_domini.txt adguard.mrs
+          ls -la adguard.mrs
+
+      - name: Pubblica il file aggiornato nel repository
+        run: |
+          git config user.name "aggiornamento-automatico"
+          git config user.email "actions@github.com"
+          git add adguard.mrs
+          git diff --cached --quiet && echo "Nessuna modifica" || git commit -m "Aggiornamento automatico $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          git push
